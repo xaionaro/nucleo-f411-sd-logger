@@ -35,6 +35,8 @@
 
 /* USER CODE BEGIN Includes */
 
+#include "string.h"
+
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -43,12 +45,24 @@ DMA_HandleTypeDef hdma_adc1;
 
 SD_HandleTypeDef hsd;
 HAL_SD_CardInfoTypedef SDCardInfo;
-DMA_HandleTypeDef hdma_sdio_tx;
+DMA_HandleTypeDef hdma_sdio;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
-uint32_t buf[2048] = {0,1,2,3,4,5,6,7,8,9,10};
+#define CHANNELS 14
+#define SD_CHANNELS 14 /* should be a power of 2 minus 2 and greater or equal to CHANNELS */
+#define WRITEBUFS 1
+#define SD_BLOCKSIZE 512
+#define BUF_LEN (SD_BLOCKSIZE<<5)
+
+uint16_t buf[BUF_LEN] = {0,1,2,3,4,5,6,7,8,9,10};
+uint16_t tmpbuf[BUF_LEN];
+
+int adc_running = 0;
+
+uint8_t writebuf[WRITEBUFS][SD_BLOCKSIZE];	// Two buffers is for DMA (in future)
+uint8_t *old_writebuf = writebuf[WRITEBUFS-1];
 
 /* USER CODE END PV */
 
@@ -62,12 +76,13 @@ static void MX_SDIO_SD_Init(void);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
-void error (double error_num, char infinite) {
+void error (float error_num, char infinite) {
 	//printf("%u\r\n", error_num);
+	adc_running = 0;
 	if (infinite)
 		while (1) {
 			int i = 0;
-			while (i++ < ((int)((double)(error_num) / 1) + 1) ) {
+			while (i++ < ((int)((float)(error_num) / 1) + 1) ) {
 				GPIOA->BSRR = GPIO_PIN_5;
 				HAL_Delay(1000 / error_num);
 				GPIOA->BSRR = GPIO_PIN_5 << 16;
@@ -92,7 +107,94 @@ void error (double error_num, char infinite) {
 }
 
 void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc) {
+	if (!adc_running)
+		return;
+
+	//error(1, 1);
+	//NVIC_SystemReset();
+
+	return;
+}
+
+void HAL_ADC_ErrorCallback (ADC_HandleTypeDef* hadc) {
+	error(30, 1);
+	NVIC_SystemReset();
+
+	return;
+}
+
+uint8_t *switch_writebuf() {
+	adc_running = 0;
+	HAL_ADC_Stop_DMA(&hadc1);
+
+	// searching the end of the filled part of the buffer
+	uint32_t buf_len;
+	uint32_t s = 0, e = BUF_LEN;
+	do {
+		uint32_t c = (e+s)/2;
+		if (buf[c] == 0xffff)
+			e = c;
+		else
+			s = c;
+	} while (e-s > 1);
+	buf_len = e;
+
+	memcpy(tmpbuf, buf,  buf_len*sizeof(*buf));
+	memset(buf,    0xff, buf_len*sizeof(*buf));
+
 	int err;
+	adc_running = 1;
+	if ((err = HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&buf, BUF_LEN)) != HAL_OK) {
+		error(400, 0);
+	}
+
+	buf_len /= CHANNELS;
+	buf_len *= CHANNELS;
+
+	if (buf_len == 0)
+		error(2, 1);
+
+	//uint8_t *new_writebuf = ((old_writebuf == writebuf[0]) ? writebuf[1] : writebuf[0]);
+	uint8_t *new_writebuf = writebuf[0];
+
+	uint16_t src_points = buf_len / CHANNELS;
+	uint16_t dst_points = SD_BLOCKSIZE / (SD_CHANNELS + 2);
+
+	float k = (float)src_points / (float)dst_points;
+
+	if (k < 1) {
+		error(src_points, 1);
+		NVIC_SystemReset();	// Too slow ADC
+	}
+
+	uint32_t dst       = 0, src       = 0;
+	uint16_t dst_point = 0, src_point = 0;
+	while (dst < SD_BLOCKSIZE) {
+
+		new_writebuf[dst++] = src_point;//ts[src_point];
+		new_writebuf[dst++] = src_point >> 8;//ts[src_point] << 8;
+
+		int chan = 0;
+		do {
+			new_writebuf[dst++] = tmpbuf[src++] >> 4;
+		} while (++chan < CHANNELS);
+
+#if CHANNELS < SD_CHANNELS
+		while (chan < SD_CHANNELS) {
+			new_writebuf[dst++] = 0;
+			chan++;
+		}
+#endif
+
+		dst_point++;
+
+		src_point = (float)dst_point * k + 0.0001;
+		src       = (float)src_point * (float)CHANNELS + 0.0001;
+	}
+
+	old_writebuf = new_writebuf;
+
+	return new_writebuf;
 }
 
 /* USER CODE END PFP */
@@ -135,30 +237,39 @@ int main(void)
 
 	*/
 
-
-	if ((err = HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&buf, 12)) != HAL_OK) {
-		error(400, 0);
-	}
+	memset(buf, 0xff, sizeof(buf));
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+	if ((err = HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&buf, BUF_LEN)) != HAL_OK) {
+		error(400, 0);
+	}
+
 	GPIOA->BSRR = GPIO_PIN_5;
 	HAL_Delay(100);
 	GPIOA->BSRR = GPIO_PIN_5 << 16;
 	HAL_Delay(100);
+
 	static int block = 0;
 	while (1)
 	{
-		
+
+		uint8_t *cur_writebuf = switch_writebuf();
 		GPIOA->BSRR = GPIO_PIN_5;
-		if ((err = HAL_SD_WriteBlocks(&hsd, buf, 512*(block++), 512, 1)) != SD_OK) {
+		int try = 0;
+
+		while ((err = HAL_SD_WriteBlocks(&hsd, (uint32_t *)cur_writebuf, SD_BLOCKSIZE*block, SD_BLOCKSIZE, 1)) != SD_OK && try++ < 120);
+
+		if (err != SD_OK)
 			error(err, 0);
-		}
+
 		GPIOA->BSRR = GPIO_PIN_5 << 16;
-		HAL_Delay(50);
-		
+
+		block++;
+
 		/*
 		GPIOA->BSRR = GPIO_PIN_5;
 		if ((err = HAL_SD_WriteBlocks_DMA(&hsd, (uint32_t *)&buf, block++, 512, 1)) != SD_OK) {
@@ -199,10 +310,10 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 192;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV8;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  RCC_OscInitStruct.PLL.PLLQ = 8;
   HAL_RCC_OscConfig(&RCC_OscInitStruct);
 
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1;
@@ -227,14 +338,14 @@ void MX_ADC1_Init(void)
     /**Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
     */
   hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV8;
+  hadc1.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV2;
   hadc1.Init.Resolution = ADC_RESOLUTION12b;
-  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 12;
+  hadc1.Init.NbrOfConversion = 14;
   hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.EOCSelection = EOC_SINGLE_CONV;
   HAL_ADC_Init(&hadc1);
@@ -243,7 +354,7 @@ void MX_ADC1_Init(void)
     */
   sConfig.Channel = ADC_CHANNEL_0;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
   HAL_ADC_ConfigChannel(&hadc1, &sConfig);
 
     /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
@@ -310,6 +421,18 @@ void MX_ADC1_Init(void)
     */
   sConfig.Channel = ADC_CHANNEL_15;
   sConfig.Rank = 12;
+  HAL_ADC_ConfigChannel(&hadc1, &sConfig);
+
+    /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+    */
+  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
+  sConfig.Rank = 13;
+  HAL_ADC_ConfigChannel(&hadc1, &sConfig);
+
+    /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+    */
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
+  sConfig.Rank = 14;
   HAL_ADC_ConfigChannel(&hadc1, &sConfig);
 
 }
