@@ -192,7 +192,7 @@ uint8_t *fill_writebuf_detailed() {
 
 	adcword_t *buf;
 
-	if ((cur_pos > BUF_LEN / 2) && (buf_switched == 0)) {
+	if ((cur_pos > BUF_LEN/CHANNELS / 2) && (buf_switched == 0)) {
 		adc_restart();
 		buf_switched = 1;
 	}
