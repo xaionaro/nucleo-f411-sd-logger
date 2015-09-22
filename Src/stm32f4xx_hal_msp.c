@@ -189,9 +189,12 @@ void HAL_SD_MspInit(SD_HandleTypeDef* hsd)
     /**SDIO GPIO Configuration    
     PA6     ------> SDIO_CMD
     PB15     ------> SDIO_CK
-    PC8     ------> SDIO_D0 
+    PC8     ------> SDIO_D0
+    PC9     ------> SDIO_D1
+    PA9     ------> SDIO_D2
+    PC11     ------> SDIO_D3 
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_9;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
@@ -205,7 +208,7 @@ void HAL_SD_MspInit(SD_HandleTypeDef* hsd)
     GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = GPIO_PIN_8;
+    GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_11;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
@@ -255,13 +258,16 @@ void HAL_SD_MspDeInit(SD_HandleTypeDef* hsd)
     /**SDIO GPIO Configuration    
     PA6     ------> SDIO_CMD
     PB15     ------> SDIO_CK
-    PC8     ------> SDIO_D0 
+    PC8     ------> SDIO_D0
+    PC9     ------> SDIO_D1
+    PA9     ------> SDIO_D2
+    PC11     ------> SDIO_D3 
     */
-    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_6);
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_6|GPIO_PIN_9);
 
     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_15);
 
-    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_8);
+    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_11);
 
     /* Peripheral DMA DeInit*/
     HAL_DMA_DeInit(hsd->hdmarx);

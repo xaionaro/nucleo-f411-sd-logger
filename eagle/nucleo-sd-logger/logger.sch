@@ -11617,6 +11617,88 @@ With round pins</description>
 </deviceset>
 </devicesets>
 </library>
+<library name="jumper">
+<description>&lt;b&gt;Jumpers&lt;/b&gt;&lt;p&gt;
+&lt;author&gt;Created by librarian@cadsoft.de&lt;/author&gt;</description>
+<packages>
+<package name="04C">
+<description>&lt;b&gt;JUMPER&lt;/b&gt;</description>
+<wire x1="-0.4572" y1="0" x2="0.4572" y2="0" width="0.6096" layer="21"/>
+<wire x1="1.905" y1="0" x2="0.635" y2="0" width="0.6096" layer="51"/>
+<wire x1="-1.905" y1="0" x2="-0.635" y2="0" width="0.6096" layer="51"/>
+<wire x1="5.715" y1="0" x2="4.953" y2="0" width="0.6096" layer="51"/>
+<wire x1="3.4798" y1="0" x2="4.1402" y2="0" width="0.6096" layer="21"/>
+<wire x1="2.667" y1="0" x2="2.032" y2="0" width="0.6096" layer="51"/>
+<pad name="1" x="-1.905" y="0" drill="0.8128" diameter="1.905" shape="octagon"/>
+<pad name="2" x="1.905" y="0" drill="0.8128" diameter="1.905" shape="octagon"/>
+<pad name="3" x="5.715" y="0" drill="0.8128" diameter="1.905" shape="octagon"/>
+<text x="-0.635" y="1.143" size="1.27" layer="25" ratio="10">&gt;NAME</text>
+<text x="1.8999" y="0" size="0.02" layer="27">&gt;VALUE</text>
+</package>
+<package name="05C">
+<description>&lt;b&gt;JUMPER&lt;/b&gt;</description>
+<wire x1="-1.0922" y1="0" x2="1.0922" y2="0" width="0.6096" layer="21"/>
+<wire x1="2.54" y1="0" x2="1.27" y2="0" width="0.6096" layer="51"/>
+<wire x1="-2.54" y1="0" x2="-1.27" y2="0" width="0.6096" layer="51"/>
+<wire x1="7.62" y1="0" x2="6.858" y2="0" width="0.6096" layer="51"/>
+<wire x1="4.7498" y1="0" x2="5.4102" y2="0" width="0.6096" layer="21"/>
+<wire x1="3.302" y1="0" x2="2.667" y2="0" width="0.6096" layer="51"/>
+<pad name="1" x="-2.54" y="0" drill="0.8128" diameter="1.905" shape="octagon"/>
+<pad name="2" x="2.54" y="0" drill="0.8128" diameter="1.905" shape="octagon"/>
+<pad name="3" x="7.62" y="0" drill="0.8128" diameter="1.905" shape="octagon"/>
+<text x="0" y="1.143" size="1.27" layer="25" ratio="10">&gt;NAME</text>
+<text x="2.5001" y="0" size="0.02" layer="27">&gt;VALUE</text>
+</package>
+</packages>
+<symbols>
+<symbol name="J_2">
+<wire x1="1.27" y1="1.905" x2="1.27" y2="0.635" width="0.254" layer="94"/>
+<wire x1="0" y1="2.54" x2="0.254" y2="2.54" width="0.1524" layer="94"/>
+<wire x1="0" y1="0" x2="0.254" y2="0" width="0.1524" layer="94"/>
+<wire x1="0" y1="-2.54" x2="0.254" y2="-2.54" width="0.1524" layer="94"/>
+<wire x1="1.27" y1="1.905" x2="0.635" y2="2.54" width="0.254" layer="94"/>
+<wire x1="1.27" y1="0.635" x2="0.635" y2="0" width="0.254" layer="94"/>
+<circle x="0.635" y="2.54" radius="0.381" width="0.254" layer="94"/>
+<circle x="0.635" y="0" radius="0.381" width="0.254" layer="94"/>
+<circle x="0.635" y="-2.54" radius="0.381" width="0.254" layer="94"/>
+<text x="1.905" y="0" size="1.778" layer="95">&gt;NAME</text>
+<text x="1.905" y="-2.54" size="1.778" layer="96">&gt;VALUE</text>
+<pin name="1" x="-2.54" y="2.54" visible="pad" length="short" direction="pas"/>
+<pin name="2" x="-2.54" y="0" visible="pad" length="short" direction="pas"/>
+<pin name="3" x="-2.54" y="-2.54" visible="pad" length="short" direction="pas"/>
+</symbol>
+</symbols>
+<devicesets>
+<deviceset name="J2" prefix="J" uservalue="yes">
+<description>Jumper switch 2 x 2.5 mm</description>
+<gates>
+<gate name="G$1" symbol="J_2" x="0" y="0"/>
+</gates>
+<devices>
+<device name="X2MM" package="04C">
+<connects>
+<connect gate="G$1" pin="1" pad="1"/>
+<connect gate="G$1" pin="2" pad="2"/>
+<connect gate="G$1" pin="3" pad="3"/>
+</connects>
+<technologies>
+<technology name=""/>
+</technologies>
+</device>
+<device name="X5MM" package="05C">
+<connects>
+<connect gate="G$1" pin="1" pad="1"/>
+<connect gate="G$1" pin="2" pad="2"/>
+<connect gate="G$1" pin="3" pad="3"/>
+</connects>
+<technologies>
+<technology name=""/>
+</technologies>
+</device>
+</devices>
+</deviceset>
+</devicesets>
+</library>
 </libraries>
 <attributes>
 </attributes>
@@ -11647,6 +11729,7 @@ With round pins</description>
 <part name="R7" library="resistor" deviceset="R-EU_" device="M3216"/>
 <part name="R8" library="resistor" deviceset="R-EU_" device="M3216"/>
 <part name="C1" library="resistor" deviceset="CPOL-US" device="E5-10.5"/>
+<part name="J1" library="jumper" deviceset="J2" device="X2MM"/>
 </parts>
 <sheets>
 <sheet>
@@ -11676,6 +11759,7 @@ With round pins</description>
 <instance part="R7" gate="G$1" x="127" y="25.4" rot="R90"/>
 <instance part="R8" gate="G$1" x="109.22" y="25.4" rot="R90"/>
 <instance part="C1" gate="G$1" x="101.6" y="48.26" rot="R270"/>
+<instance part="J1" gate="G$1" x="101.6" y="91.44"/>
 </instances>
 <busses>
 </busses>
@@ -11822,6 +11906,10 @@ With round pins</description>
 <wire x1="93.98" y1="86.36" x2="96.52" y2="83.82" width="0.1524" layer="91"/>
 <pinref part="C1" gate="G$1" pin="-"/>
 <junction x="96.52" y="48.26"/>
+<pinref part="J1" gate="G$1" pin="1"/>
+<wire x1="99.06" y1="93.98" x2="93.98" y2="88.9" width="0.1524" layer="91"/>
+<wire x1="93.98" y1="88.9" x2="93.98" y2="86.36" width="0.1524" layer="91"/>
+<junction x="93.98" y="86.36"/>
 </segment>
 </net>
 <net name="VDD" class="0">
@@ -11863,6 +11951,9 @@ With round pins</description>
 <pinref part="C1" gate="G$1" pin="+"/>
 <wire x1="104.14" y1="48.26" x2="106.68" y2="48.26" width="0.1524" layer="91"/>
 <junction x="106.68" y="48.26"/>
+<pinref part="J1" gate="G$1" pin="3"/>
+<wire x1="99.06" y1="88.9" x2="99.06" y2="86.36" width="0.1524" layer="91"/>
+<wire x1="99.06" y1="86.36" x2="104.14" y2="81.28" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$11" class="0">
@@ -12004,6 +12095,13 @@ With round pins</description>
 <junction x="114.3" y="10.16"/>
 <pinref part="R3" gate="G$1" pin="1"/>
 <wire x1="114.3" y1="10.16" x2="114.3" y2="20.32" width="0.1524" layer="91"/>
+</segment>
+</net>
+<net name="N$26" class="0">
+<segment>
+<pinref part="J1" gate="G$1" pin="2"/>
+<pinref part="U$1" gate="CN7" pin="PD2_4"/>
+<wire x1="99.06" y1="91.44" x2="73.66" y2="91.44" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>

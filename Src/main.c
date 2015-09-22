@@ -52,17 +52,18 @@ DMA_HandleTypeDef hdma_sdio;
 
 #define CHANNELS 14
 #define SD_CHANNELS 14 /* should be a power of 2 minus 2 and greater or equal to CHANNELS */
-#define WRITEBUFS 1
+#define ADCBUFS 2
 #define SD_BLOCKSIZE 512
-#define BUF_LEN (SD_BLOCKSIZE<<5)
+#define BUF_LEN (SD_BLOCKSIZE<<3)
+#define	dst_points (SD_BLOCKSIZE / (SD_CHANNELS + 2))
 
-uint16_t buf[BUF_LEN] = {0,1,2,3,4,5,6,7,8,9,10};
-uint16_t tmpbuf[BUF_LEN];
+volatile uint16_t adcbufs[ADCBUFS][BUF_LEN] = {{0,1,2,3,4,5,6,7,8,9,10},{0,1,2,3,4,5,6,7,8,9,10}};
+volatile uint16_t *parsebuf = &adcbufs[1][0];
+volatile uint16_t *adcbuf   = &adcbufs[0][0];
+volatile uint8_t   adcbuf_runned = 0;
+volatile int adc_running = 0;
 
-int adc_running = 0;
-
-uint8_t writebuf[WRITEBUFS][SD_BLOCKSIZE];	// Two buffers is for DMA (in future)
-uint8_t *old_writebuf = writebuf[WRITEBUFS-1];
+uint8_t writebuf[SD_BLOCKSIZE];
 
 /* USER CODE END PV */
 
@@ -107,59 +108,47 @@ void error (float error_num, char infinite) {
 }
 
 void HAL_ADC_ConvCpltCallback (ADC_HandleTypeDef* hadc) {
-	if (!adc_running)
-		return;
-
-	//error(1, 1);
-	//NVIC_SystemReset();
-
 	return;
 }
 
 void HAL_ADC_ErrorCallback (ADC_HandleTypeDef* hadc) {
-	error(30, 1);
 	NVIC_SystemReset();
 
 	return;
 }
 
-uint8_t *switch_writebuf() {
-	adc_running = 0;
-	HAL_ADC_Stop_DMA(&hadc1);
+void swap_bufs() {
+	if (adcbuf_runned == 1) {
+		parsebuf = &adcbufs[1][0];
+		adcbuf   = &adcbufs[0][0];
+		adcbuf_runned = 0;
+	} else {
+		parsebuf = &adcbufs[0][0];
+		adcbuf   = &adcbufs[1][0];
+		adcbuf_runned = 1;
+	}
+	return;
+}
 
-	// searching the end of the filled part of the buffer
-	uint32_t buf_len;
-	uint32_t s = 0, e = BUF_LEN;
-	do {
-		uint32_t c = (e+s)/2;
-		if (buf[c] == 0xffff)
-			e = c;
-		else
-			s = c;
-	} while (e-s > 1);
-	buf_len = e;
+void adc_restart() {
+	uint32_t i = 0;
+	while (parsebuf[i] != 0xffff && i < BUF_LEN) parsebuf[i++] = 0xffff;
 
-	memcpy(tmpbuf, buf,  buf_len*sizeof(*buf));
-	memset(buf,    0xff, buf_len*sizeof(*buf));
+	if (adc_running) {
+		HAL_ADC_Stop_DMA(&hadc1);
+	}
+
+	swap_bufs();
 
 	int err;
 	adc_running = 1;
-	if ((err = HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&buf, BUF_LEN)) != HAL_OK) {
+
+	if ((err = HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adcbuf, BUF_LEN)) != HAL_OK) {
 		error(400, 0);
 	}
+}
 
-	buf_len /= CHANNELS;
-	buf_len *= CHANNELS;
-
-	if (buf_len == 0)
-		error(2, 1);
-
-	//uint8_t *new_writebuf = ((old_writebuf == writebuf[0]) ? writebuf[1] : writebuf[0]);
-	uint8_t *new_writebuf = writebuf[0];
-
-	uint16_t src_points = buf_len / CHANNELS;
-	uint16_t dst_points = SD_BLOCKSIZE / (SD_CHANNELS + 2);
-
+void fill_writebuf(uint8_t *dst_buf, uint16_t *src_buf, uint16_t src_points) {
 	float k = (float)src_points / (float)dst_points;
 
 	if (k < 1) {
@@ -171,30 +160,76 @@ uint8_t *switch_writebuf() {
 	uint16_t dst_point = 0, src_point = 0;
 	while (dst < SD_BLOCKSIZE) {
 
-		new_writebuf[dst++] = src_point;//ts[src_point];
-		new_writebuf[dst++] = src_point >> 8;//ts[src_point] << 8;
+		dst_buf[dst++] = src_point;//ts[src_point];
+		dst_buf[dst++] = src_point >> 8;//ts[src_point] << 8;
 
 		int chan = 0;
 		do {
-			new_writebuf[dst++] = tmpbuf[src++] >> 4;
+			dst_buf[dst++] = src_buf[src++] >> 4;
 		} while (++chan < CHANNELS);
 
 #if CHANNELS < SD_CHANNELS
 		while (chan < SD_CHANNELS) {
-			new_writebuf[dst++] = 0;
+			dst_buf[dst++] = 0;
 			chan++;
 		}
 #endif
 
 		dst_point++;
 
-		src_point = (float)dst_point * k + 0.0001;
-		src       = (float)src_point * (float)CHANNELS + 0.0001;
+		src_point = (float)dst_point * k + 0.000001;
+		src       = (float)src_point * (float)CHANNELS + 0.000001;
 	}
 
-	old_writebuf = new_writebuf;
+	return;
+}
 
-	return new_writebuf;
+uint8_t *fill_writebuf_detailed() {
+	static uint32_t cur_pos = 0;
+
+	uint16_t *buf = adcbuf;
+
+	if (cur_pos + dst_points*2 > BUF_LEN)
+		adc_restart();
+
+	fill_writebuf(writebuf, &buf[cur_pos], dst_points);
+
+	cur_pos += dst_points;
+
+	if (cur_pos + dst_points > BUF_LEN)
+		cur_pos = 0;
+
+	return writebuf;
+}
+
+
+uint8_t *fill_writebuf_inseparable() {
+	adc_restart();
+
+	// searching the end of the filled part of the buffer
+	uint32_t buf_len;
+	uint32_t s = 0, e = BUF_LEN-1;
+	do {
+		uint32_t c = (e+s)/2;
+		if (parsebuf[c] == 0xffff)
+			e = c;
+		else
+			s = c;
+	} while (e-s > 1);
+	buf_len = e;
+
+	buf_len /= CHANNELS;
+	buf_len *= CHANNELS;
+
+	if (buf_len == 0)
+		error(2, 1);
+
+	//uint8_t *new_writebuf = ((old_writebuf == writebuf[0]) ? writebuf[1] : writebuf[0]);
+
+	uint16_t src_points = buf_len / CHANNELS;
+	fill_writebuf(writebuf, parsebuf, src_points);
+
+	return writebuf;
 }
 
 /* USER CODE END PFP */
@@ -237,16 +272,12 @@ int main(void)
 
 	*/
 
-	memset(buf, 0xff, sizeof(buf));
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-	if ((err = HAL_ADC_Start_DMA(&hadc1, (uint32_t *)&buf, BUF_LEN)) != HAL_OK) {
-		error(400, 0);
-	}
+	adc_restart();
 
 	GPIOA->BSRR = GPIO_PIN_5;
 	HAL_Delay(100);
@@ -257,7 +288,14 @@ int main(void)
 	while (1)
 	{
 
-		uint8_t *cur_writebuf = switch_writebuf();
+		uint8_t forceDetails = HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2) == GPIO_PIN_SET;
+		uint8_t *cur_writebuf;
+
+		if (forceDetails)
+			cur_writebuf = fill_writebuf_detailed();
+		else
+			cur_writebuf = fill_writebuf_inseparable();
+
 		GPIOA->BSRR = GPIO_PIN_5;
 		int try = 0;
 
@@ -312,12 +350,12 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 192;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV8;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
   RCC_OscInitStruct.PLL.PLLQ = 8;
   HAL_RCC_OscConfig(&RCC_OscInitStruct);
 
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
@@ -338,7 +376,7 @@ void MX_ADC1_Init(void)
     /**Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
     */
   hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV2;
+  hadc1.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION12b;
   hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = ENABLE;
@@ -447,8 +485,10 @@ void MX_SDIO_SD_Init(void)
   hsd.Init.ClockPowerSave = SDIO_CLOCK_POWER_SAVE_DISABLE;
   hsd.Init.BusWide = SDIO_BUS_WIDE_1B;
   hsd.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
-  hsd.Init.ClockDiv = 10;
+  hsd.Init.ClockDiv = 2;
   HAL_SD_Init(&hsd, &SDCardInfo);
+
+  HAL_SD_WideBusOperation_Config(&hsd, SDIO_BUS_WIDE_4B);
 
 }
 
@@ -487,6 +527,7 @@ void MX_GPIO_Init(void)
   __GPIOH_CLK_ENABLE();
   __GPIOA_CLK_ENABLE();
   __GPIOB_CLK_ENABLE();
+  __GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
@@ -508,6 +549,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PD2 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
 }
 

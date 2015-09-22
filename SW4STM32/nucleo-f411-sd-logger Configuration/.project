@@ -27,6 +27,30 @@
 	<linkedResources>
 		
 	<link>
+			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_flash.c</name>
+			<type>1</type>
+			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c</location>
+		</link><link>
+			<name>Application/User/stm32f4xx_it.c</name>
+			<type>1</type>
+			<location>PARENT-2-PROJECT_LOC/Src/stm32f4xx_it.c</location>
+		</link><link>
+			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_sd.c</name>
+			<type>1</type>
+			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sd.c</location>
+		</link><link>
+			<name>Application/User/stm32f4xx_hal_msp.c</name>
+			<type>1</type>
+			<location>PARENT-2-PROJECT_LOC/Src/stm32f4xx_hal_msp.c</location>
+		</link><link>
+			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_pwr.c</name>
+			<type>1</type>
+			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c</location>
+		</link><link>
+			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_adc.c</name>
+			<type>1</type>
+			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c</location>
+		</link><link>
 			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_pwr_ex.c</name>
 			<type>1</type>
 			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c</location>
@@ -86,29 +110,5 @@
 			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_cortex.c</name>
 			<type>1</type>
 			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c</location>
-		</link><link>
-			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_flash.c</name>
-			<type>1</type>
-			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c</location>
-		</link><link>
-			<name>Application/User/stm32f4xx_it.c</name>
-			<type>1</type>
-			<location>PARENT-2-PROJECT_LOC/Src/stm32f4xx_it.c</location>
-		</link><link>
-			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_sd.c</name>
-			<type>1</type>
-			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_sd.c</location>
-		</link><link>
-			<name>Application/User/stm32f4xx_hal_msp.c</name>
-			<type>1</type>
-			<location>PARENT-2-PROJECT_LOC/Src/stm32f4xx_hal_msp.c</location>
-		</link><link>
-			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_pwr.c</name>
-			<type>1</type>
-			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c</location>
-		</link><link>
-			<name>Drivers/STM32F4xx_HAL_Driver/stm32f4xx_hal_adc.c</name>
-			<type>1</type>
-			<location>PARENT-2-PROJECT_LOC/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c</location>
 		</link></linkedResources>
 </projectDescription>
