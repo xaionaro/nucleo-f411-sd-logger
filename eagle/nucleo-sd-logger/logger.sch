@@ -11730,6 +11730,7 @@ With round pins</description>
 <part name="R8" library="resistor" deviceset="R-EU_" device="M3216"/>
 <part name="C1" library="resistor" deviceset="CPOL-US" device="E5-10.5"/>
 <part name="J1" library="jumper" deviceset="J2" device="X2MM"/>
+<part name="R9" library="resistor" deviceset="R-EU_" device="M3216"/>
 </parts>
 <sheets>
 <sheet>
@@ -11760,6 +11761,7 @@ With round pins</description>
 <instance part="R8" gate="G$1" x="109.22" y="25.4" rot="R90"/>
 <instance part="C1" gate="G$1" x="101.6" y="48.26" rot="R270"/>
 <instance part="J1" gate="G$1" x="101.6" y="91.44"/>
+<instance part="R9" gate="G$1" x="88.9" y="91.44"/>
 </instances>
 <busses>
 </busses>
@@ -12099,9 +12101,16 @@ With round pins</description>
 </net>
 <net name="N$26" class="0">
 <segment>
-<pinref part="J1" gate="G$1" pin="2"/>
 <pinref part="U$1" gate="CN7" pin="PD2_4"/>
-<wire x1="99.06" y1="91.44" x2="73.66" y2="91.44" width="0.1524" layer="91"/>
+<pinref part="R9" gate="G$1" pin="1"/>
+<wire x1="73.66" y1="91.44" x2="83.82" y2="91.44" width="0.1524" layer="91"/>
+</segment>
+</net>
+<net name="N$27" class="0">
+<segment>
+<pinref part="R9" gate="G$1" pin="2"/>
+<pinref part="J1" gate="G$1" pin="2"/>
+<wire x1="93.98" y1="91.44" x2="99.06" y2="91.44" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>
