@@ -54,12 +54,14 @@ DMA_HandleTypeDef hdma_sdio;
 #define SD_CHANNELS 14 /* should be a power of 2 minus 2 and greater or equal to CHANNELS */
 #define ADCBUFS 2
 #define SD_BLOCKSIZE 512
-#define BUF_LEN (SD_BLOCKSIZE<<3)
+#define BUF_LEN ((SD_BLOCKSIZE<<6) + (SD_BLOCKSIZE<<5))
 #define	dst_points (SD_BLOCKSIZE / (SD_CHANNELS + 2))
 
-volatile uint16_t adcbufs[ADCBUFS][BUF_LEN] = {{0,1,2,3,4,5,6,7,8,9,10},{0,1,2,3,4,5,6,7,8,9,10}};
-volatile uint16_t *parsebuf = &adcbufs[1][0];
-volatile uint16_t *adcbuf   = &adcbufs[0][0];
+typedef uint8_t adcword_t;
+
+volatile adcword_t adcbufs[ADCBUFS][BUF_LEN] = {{0,1,2,3,4,5,6,7,8,9,10},{0,1,2,3,4,5,6,7,8,9,10}};
+volatile adcword_t *parsebuf = &adcbufs[1][0];
+volatile adcword_t *adcbuf   = &adcbufs[0][0];
 volatile uint8_t   adcbuf_runned = 0;
 volatile int adc_running = 0;
 
@@ -132,7 +134,7 @@ void swap_bufs() {
 
 void adc_restart() {
 	uint32_t i = 0;
-	while (parsebuf[i] != 0xffff && i < BUF_LEN) parsebuf[i++] = 0xffff;
+	while (parsebuf[i] != ~0 && i < BUF_LEN) parsebuf[i++] = ~0;
 
 	if (adc_running) {
 		HAL_ADC_Stop_DMA(&hadc1);
@@ -148,7 +150,7 @@ void adc_restart() {
 	}
 }
 
-void fill_writebuf(uint8_t *dst_buf, uint16_t *src_buf, uint16_t src_points) {
+void fill_writebuf(uint8_t *dst_buf, adcword_t *src_buf, uint16_t src_point_start, uint16_t src_points) {
 	float k = (float)src_points / (float)dst_points;
 
 	if (k < 1) {
@@ -156,8 +158,8 @@ void fill_writebuf(uint8_t *dst_buf, uint16_t *src_buf, uint16_t src_points) {
 		NVIC_SystemReset();	// Too slow ADC
 	}
 
-	uint32_t dst       = 0, src       = 0;
-	uint16_t dst_point = 0, src_point = 0;
+	uint16_t dst_point = 0, src_point = src_point_start;
+	uint32_t dst       = 0, src       = src_point*CHANNELS;
 	while (dst < SD_BLOCKSIZE) {
 
 		dst_buf[dst++] = src_point;//ts[src_point];
@@ -165,7 +167,7 @@ void fill_writebuf(uint8_t *dst_buf, uint16_t *src_buf, uint16_t src_points) {
 
 		int chan = 0;
 		do {
-			dst_buf[dst++] = src_buf[src++] >> 4;
+			dst_buf[dst++] = src_buf[src++];
 		} while (++chan < CHANNELS);
 
 #if CHANNELS < SD_CHANNELS
@@ -177,8 +179,8 @@ void fill_writebuf(uint8_t *dst_buf, uint16_t *src_buf, uint16_t src_points) {
 
 		dst_point++;
 
-		src_point = (float)dst_point * k + 0.000001;
-		src       = (float)src_point * (float)CHANNELS + 0.000001;
+		src_point = (float)src_point_start + (float)dst_point * k + 0.000001;
+		src       = src_point * CHANNELS;
 	}
 
 	return;
@@ -186,18 +188,27 @@ void fill_writebuf(uint8_t *dst_buf, uint16_t *src_buf, uint16_t src_points) {
 
 uint8_t *fill_writebuf_detailed() {
 	static uint32_t cur_pos = 0;
+	static uint8_t buf_switched = 0;
 
-	uint16_t *buf = adcbuf;
+	adcword_t *buf;
 
-	if (cur_pos + dst_points*2 > BUF_LEN)
+	if ((cur_pos > BUF_LEN / 2) && (buf_switched == 0)) {
 		adc_restart();
+		buf_switched = 1;
+	}
 
-	fill_writebuf(writebuf, &buf[cur_pos], dst_points);
+	buf = (buf_switched ? parsebuf : adcbuf);
+
+	while (buf[BUF_LEN / 2] == ~0);
+
+	fill_writebuf(writebuf, buf, cur_pos, dst_points);
 
 	cur_pos += dst_points;
 
-	if (cur_pos + dst_points > BUF_LEN)
+	if (cur_pos + dst_points > BUF_LEN/CHANNELS) {
 		cur_pos = 0;
+		buf_switched = 0;
+	}
 
 	return writebuf;
 }
@@ -211,7 +222,7 @@ uint8_t *fill_writebuf_inseparable() {
 	uint32_t s = 0, e = BUF_LEN-1;
 	do {
 		uint32_t c = (e+s)/2;
-		if (parsebuf[c] == 0xffff)
+		if (parsebuf[c] == ~0)
 			e = c;
 		else
 			s = c;
@@ -227,7 +238,7 @@ uint8_t *fill_writebuf_inseparable() {
 	//uint8_t *new_writebuf = ((old_writebuf == writebuf[0]) ? writebuf[1] : writebuf[0]);
 
 	uint16_t src_points = buf_len / CHANNELS;
-	fill_writebuf(writebuf, parsebuf, src_points);
+	fill_writebuf(writebuf, parsebuf, 0, src_points);
 
 	return writebuf;
 }
@@ -277,6 +288,8 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
+	uint32_t i = 0;
+	while (adcbuf[i] != ~0 && i < BUF_LEN) adcbuf[i++] = ~0;
 	adc_restart();
 
 	GPIOA->BSRR = GPIO_PIN_5;
@@ -376,8 +389,8 @@ void MX_ADC1_Init(void)
     /**Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
     */
   hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV4;
-  hadc1.Init.Resolution = ADC_RESOLUTION12b;
+  hadc1.Init.ClockPrescaler = ADC_CLOCKPRESCALER_PCLK_DIV8;
+  hadc1.Init.Resolution = ADC_RESOLUTION8b;
   hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
