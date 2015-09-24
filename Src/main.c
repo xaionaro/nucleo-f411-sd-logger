@@ -57,10 +57,10 @@ DMA_HandleTypeDef hdma_sdio;
 #define ADCMODE 2	// 0 -- 8bit, 1 -- 12bit->8bit, 2 -- 12bit
 
 #if ADCMODE > 0
-#	define BUF_LEN ((SD_BLOCKSIZE<<5) + (SD_BLOCKSIZE<<4) + (SD_BLOCKSIZE<<3))
+#	define BUF_LEN ((SD_BLOCKSIZE<<5) + (SD_BLOCKSIZE<<4))
 	typedef uint16_t adcword_t;
 #else 
-#	define BUF_LEN ((SD_BLOCKSIZE<<6) + (SD_BLOCKSIZE<<5) + (SD_BLOCKSIZE<<4))
+#	define BUF_LEN ((SD_BLOCKSIZE<<6) + (SD_BLOCKSIZE<<5))
 	typedef uint8_t adcword_t;
 #endif
 
@@ -77,6 +77,8 @@ DMA_HandleTypeDef hdma_sdio;
 #	define	dst_points (SD_BLOCKSIZE / (SD_CHANNELS + 2))
 #endif
 
+
+#define ADC_NOT_FILLED ((adcword_t)~0)
 
 
 adcword_t adcbufs[ADCBUFS][BUF_LEN] = {{0,1,2,3,4,5,6,7,8,9,10},{0,1,2,3,4,5,6,7,8,9,10}};
@@ -247,7 +249,7 @@ sdword_t *fill_writebuf_detailed() {
 
 	buf = (buf_switched ? parsebuf : adcbuf);
 
-	while (buf[BUF_LEN / 2] == ~0);
+	while (buf[BUF_LEN / 2] == ADC_NOT_FILLED);
 
 	fill_writebuf(writebuf, buf, cur_pos, dst_points);
 
@@ -266,11 +268,11 @@ sdword_t *fill_writebuf_inseparable() {
 	adc_restart();
 
 	// searching the end of the filled part of the buffer
-	uint32_t buf_len;
+	static uint32_t buf_len = 0;
 	uint32_t s = 0, e = BUF_LEN-1;
 	do {
 		uint32_t c = (e+s)/2;
-		if (parsebuf[c] == ~0)
+		if (parsebuf[c] == ADC_NOT_FILLED)
 			e = c;
 		else
 			s = c;
@@ -351,21 +353,31 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+	GPIOA->BSRR = GPIO_PIN_5;
+	HAL_Delay(100);
+	GPIOA->BSRR = GPIO_PIN_5 << 16;
+	HAL_Delay(100);
 
-	memset(parsebuf, 0, BUF_LEN*sizeof(*parsebuf));
+	uint8_t forceDetails = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_15) == GPIO_PIN_SET;
+
+	memset(writebuf, 0, SD_BLOCKSIZE);
 
 #define S(a) a,sizeof(a)
 #if ADCMODE >= 2
-	memcpy(parsebuf, S("\000voltlogger\000\000\017\000\000NucleoF411SD000\000"));
+	memcpy(writebuf, S("\000voltlogger\000\000\017\024\000NucleoF411SD000\000"));
 #else
-	memcpy(parsebuf, S("\000voltlogger\000\002\016\000\000NucleoF411SD000\000"));
+	memcpy(writebuf, S("\000voltlogger\000\002\016\024\000NucleoF411SD000\000"));
 #endif
 #undef S
-	sd_write(&hsd, 0, parsebuf);
+
+	if (!forceDetails)
+		writebuf[12] |= 0x04;
+
+	sd_write(&hsd, 0, writebuf);
 
 	{
 		uint32_t i = 0;
-		while (adcbuf[i] != ~0 && i < BUF_LEN) adcbuf[i++] = ~0;
+		while (adcbuf[i] != ADC_NOT_FILLED && i < BUF_LEN) adcbuf[i++] = ADC_NOT_FILLED;
 	}
 	adc_restart();
 
@@ -378,7 +390,6 @@ int main(void)
 	while (1)
 	{
 
-		uint8_t forceDetails = HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2) == GPIO_PIN_SET;
 		sdword_t *cur_writebuf;
 
 		if (forceDetails)
@@ -596,7 +607,6 @@ void MX_GPIO_Init(void)
   __GPIOH_CLK_ENABLE();
   __GPIOA_CLK_ENABLE();
   __GPIOB_CLK_ENABLE();
-  __GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
@@ -619,11 +629,11 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PD2 */
-  GPIO_InitStruct.Pin = GPIO_PIN_2;
+  /*Configure GPIO pin : PA15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
 
